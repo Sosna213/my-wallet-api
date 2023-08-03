@@ -15,9 +15,15 @@ export class UserService {
     async createUser(user: UserDto) {
         const userEntity = new User();
         userEntity.name = user.name;
+        userEntity.email = user.email;
+        userEntity.nickname = user.nickname;
         userEntity.id = user.id;
         await this.userRepository.save(userEntity);
         return userEntity;
+    }
+
+    async getAllUsers(){
+        return await this.userRepository.find();
     }
 
 }
