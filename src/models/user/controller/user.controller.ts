@@ -1,18 +1,13 @@
 import {Body, Controller, Get, Post, Req, UseGuards} from '@nestjs/common';
 import {UserService} from "../service/user.service";
-import {UserDto} from "../DTOs/user.dto";
 import {Request} from 'express';
-import {AuthorizationGuard} from "../../authorization/authorization.guard";
+import {AuthorizationGuard} from "../../../authorization/authorization.guard";
+import {UserDto} from "../DTO/user.dto";
 
 @Controller('user')
 export class UserController {
 
     constructor(private readonly userService: UserService) {
-    }
-
-    @Post()
-    createUser(@Body() user: UserDto) {
-        return this.userService.createUser(user);
     }
 
     @UseGuards(AuthorizationGuard)
@@ -34,7 +29,7 @@ export class UserController {
     @UseGuards(AuthorizationGuard)
     @Post('register')
     register(@Body() user: UserDto, @Req() request: Request) {
-        user.id = request.auth.payload.sub;
-        return this.userService.createUser(user);
+        const userId = request.auth.payload.sub;
+        return this.userService.createUser(user, userId);
     }
 }
