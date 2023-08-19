@@ -17,7 +17,7 @@ export class UserController {
     }
 
     @UseGuards(AuthorizationGuard)
-    @Get('/isRegistered')
+    @Get('/is-registered')
     checkUserIsInDatabase(@Req() request: Request): Promise<Boolean> {
         const allUsers = this.userService.getAllUsers();
         const userId = request.auth.payload.sub;
