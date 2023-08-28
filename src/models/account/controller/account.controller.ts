@@ -25,11 +25,11 @@ export class AccountController {
         return this.accountService.getAccountsForUser(userId);
     }
     @UseGuards(AuthorizationGuard)
-    @Delete('/:id')
+    @Delete('/delete/:id')
     deleteAccountById(@Req() request: Request, @Param('id') id){
         const userId = request.auth.payload.sub;
 
-        return this.accountService.deleteAccountById(userId, id);
+        return {response: this.accountService.deleteAccountById(userId, id), deletedId: id};
     }
 
 }

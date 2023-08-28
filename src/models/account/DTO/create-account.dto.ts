@@ -5,4 +5,5 @@ export class CreateAccountDTO {
     name: string;
     @IsNotEmpty()
     currency: string;
+    balance?: number;
 }

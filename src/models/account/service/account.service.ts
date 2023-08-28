@@ -15,6 +15,7 @@ export class AccountService {
         return this.accountRepository.save({
             name: accountDTO.name,
             currency: accountDTO.currency,
+            balance: accountDTO.balance ?? 0,
             userId: userId,
         });
     }
