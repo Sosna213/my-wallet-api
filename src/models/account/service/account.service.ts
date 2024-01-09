@@ -3,6 +3,7 @@ import {InjectRepository} from "@nestjs/typeorm";
 import {Repository} from "typeorm";
 import {Account} from "../entity/account.entity";
 import {CreateAccountDTO} from "../DTO/create-account.dto";
+import {IPaginationOptions, Pagination, paginate} from "nestjs-typeorm-paginate";
 
 @Injectable()
 export class AccountService {
@@ -19,10 +20,14 @@ export class AccountService {
             userId: userId,
         });
     }
-    async getAccountsForUser(userId: string) {
-       return this.accountRepository.findBy({userId: userId});
-    }
     async deleteAccountById(userId: string, accountId){
         return this.accountRepository.delete({userId: userId, id: accountId})
+    }
+
+    async getAccountsForUser(options: IPaginationOptions, userId: string): Promise<Pagination<Account>> {
+        const qb = this.accountRepository.createQueryBuilder('account').where("account.userId = :id", {id: userId});
+        qb.orderBy('account.id', 'DESC');
+
+        return paginate<Account>(qb, options);
     }
 }
