@@ -1,0 +1,3 @@
+[submodule "my-wallet-shared-types"]
+	path = my-wallet-shared-types
+	url = https://github.com/Sosna213/my-wallet-shared-types

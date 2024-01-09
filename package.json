@@ -29,6 +29,7 @@
     "class-validator": "^0.14.0",
     "express-oauth2-jwt-bearer": "^1.5.0",
     "helmet": "^7.0.0",
+    "nestjs-typeorm-paginate": "^4.0.4",
     "nocache": "^4.0.0",
     "pg": "^8.11.1",
     "reflect-metadata": "^0.1.13",
