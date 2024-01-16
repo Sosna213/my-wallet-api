@@ -1,5 +1,6 @@
 import {Entity, Column, PrimaryColumn, OneToMany} from 'typeorm';
 import {Account} from "../../account/entity/account.entity";
+import {Transaction} from "../../account/entity/transaction.entity";
 
 @Entity()
 export class User {
@@ -14,4 +15,6 @@ export class User {
     name: string;
     @OneToMany(() => Account, (account) => account.user)
     accounts: Account[];
+    @OneToMany(() => Transaction, (transaction) => transaction.user)
+    transactions: Transaction[];
 }

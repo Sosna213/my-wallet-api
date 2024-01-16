@@ -2,8 +2,8 @@ import {
     Body,
     Controller,
     DefaultValuePipe,
-    Delete,
-    Get,
+    Delete, forwardRef,
+    Get, Inject,
     Param,
     ParseIntPipe,
     Post, Query,
@@ -16,11 +16,15 @@ import {AuthorizationGuard} from "../../../authorization/authorization.guard";
 import {CreateAccountDTO} from "../DTO/create-account.dto";
 import {Account} from "../entity/account.entity";
 import {IPaginationOptions, Pagination} from "nestjs-typeorm-paginate";
+import {ApiTags} from "@nestjs/swagger";
 
+@ApiTags('account')
 @Controller('account')
 export class AccountController {
 
-    constructor(private accountService: AccountService) {
+    constructor(
+        @Inject(forwardRef(() => AccountService))
+        private accountService: AccountService) {
     }
 
     @UseGuards(AuthorizationGuard)
@@ -34,7 +38,7 @@ export class AccountController {
     @Get('/user-accounts')
     getAccountsForUser(@Req() request: Request,
                        @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                       @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 1,): Promise<Pagination<Account>> {
+                       @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 1): Promise<Pagination<Account>> {
         const userId = request.auth.payload.sub;
         const options: IPaginationOptions = {
             limit,
