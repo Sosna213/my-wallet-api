@@ -25,6 +25,13 @@ export class TransactionController {
 
         return this.transactionService.createTransaction(transaction, userId);
     }
+    @UseGuards(AuthorizationGuard)
+    @Post('/batch')
+    createTransactions(@Body() transactions: CreateTransactionDTO[], @Req() request: Request) {
+        const userId = request.auth.payload.sub;
+
+        return this.transactionService.createTransactions(transactions, userId);
+    }
 
     @UseGuards(AuthorizationGuard)
     @Delete('/delete/:id')
@@ -42,6 +49,7 @@ export class TransactionController {
                            @Query('accountId') accountId?: string[],
                            @Query('transactionName') transactionName?: string,
                            @Query('category') category?: string[],
+                           @Query('currency') currency?: string[],
                            @Query('eq') eq?: number,
                            @Query('gte') gte?: number,
                            @Query('lte') lte?: number,
@@ -57,6 +65,7 @@ export class TransactionController {
             transactionName,
             accountId,
             category,
+            currency,
             eq,
             gte,
             lte,

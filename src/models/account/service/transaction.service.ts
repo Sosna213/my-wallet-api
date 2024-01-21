@@ -1,6 +1,6 @@
 import {Injectable} from '@nestjs/common';
 import {InjectRepository} from "@nestjs/typeorm";
-import {DataSource, DeleteResult, Repository} from "typeorm";
+import {DataSource, DeleteResult, Repository, SelectQueryBuilder} from "typeorm";
 import {Transaction} from "../entity/transaction.entity";
 import {CreateTransactionDTO} from "../DTO/CreateTransactionDTO";
 import {IPaginationOptions, paginate, Pagination} from "nestjs-typeorm-paginate";
@@ -8,6 +8,13 @@ import {TransactionsFilters} from "../../../../my-wallet-shared-types/shared-typ
 import {Account} from '../entity/account.entity';
 import {User} from "../../user/entity/user.entity";
 
+type PaginationWithFacets<T> = Pagination<T> & {
+    facets: {
+        currency: { key: string, count: number }[],
+        category: { key: string, count: number }[],
+        account: { id: string, key: string, count: number }[]
+    }
+}
 
 @Injectable()
 export class TransactionService {
@@ -49,18 +56,64 @@ export class TransactionService {
         }
     }
 
+    async createTransactions(transactions: CreateTransactionDTO[], userId: string): Promise<Transaction[]> {
+        const queryRunner = this.dataSource.createQueryRunner();
+
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+
+        try {
+            const results: Transaction[] = [];
+
+            for (const transactionDTO of transactions) {
+                const account = await queryRunner.manager.findOne(Account, { where: { id: transactionDTO.accountId } });
+                await queryRunner.manager.save(Account, { ...account, balance: account.balance + transactionDTO.amount });
+
+                const user = await queryRunner.manager.findOne(User, { where: { id: userId } });
+
+                const transaction: Transaction = new Transaction();
+                transaction.user = user;
+                transaction.amount = transactionDTO.amount;
+                transaction.date = transactionDTO.date;
+                transaction.category = transactionDTO.category;
+                transaction.name = transactionDTO.name;
+                transaction.account = account;
+
+                const result = await queryRunner.manager.save(Transaction, transaction);
+                results.push(result);
+            }
+
+            await queryRunner.commitTransaction();
+            return results;
+        } catch (err) {
+            console.error("Cannot create transactions", err);
+            await queryRunner.rollbackTransaction();
+            throw err;
+        } finally {
+            await queryRunner.release();
+        }
+    }
+
     async deleteTransactionById(userId: string, transactionId: string): Promise<DeleteResult> {
         return this.transactionRepository.delete({id: transactionId, user: {id: userId}})
     }
 
-    async getTransactionsForUser(options: IPaginationOptions, userId: string, filters?: TransactionsFilters): Promise<Pagination<Transaction>> {
-        const qb = this.transactionRepository.createQueryBuilder('transaction').leftJoin('transaction.account', 'account').where("transaction.user_Id = :id", {id: userId});
+    async getTransactionsForUser(options: IPaginationOptions, userId: string, filters?: TransactionsFilters): Promise<PaginationWithFacets<Transaction>> {
+        const qb: SelectQueryBuilder<Transaction> = this.transactionRepository.createQueryBuilder('transaction').leftJoin('transaction.account', 'account').where("transaction.user_Id = :id", {id: userId});
+        const facets = {
+            currency: await this.getCurrencyFacet(qb),
+            category: await this.getCategoryFacet(qb),
+            account: await this.getAccountFacet(qb),
+        }
         if (filters) {
             if (filters.accountId && filters.accountId.length > 0) {
-                qb.andWhere('transaction.accountId IN (:...accountIds)', { accountIds: filters.accountId });
+                qb.andWhere('transaction.account_Id IN (:...accountIds)', {accountIds: filters.accountId});
             }
             if (filters.category && filters.category.length > 0) {
-                qb.andWhere('transaction.category IN (:...categories)', { categories: filters.category });
+                qb.andWhere('transaction.category IN (:...categories)', {categories: filters.category});
+            }
+            if (filters.currency && filters.currency.length > 0) {
+                qb.andWhere('account.currency IN (:...currencies)', {currencies: filters.currency});
             }
             if (filters.eq !== undefined) {
                 qb.andWhere("transaction.amount = :eq", {eq: filters.eq});
@@ -84,6 +137,68 @@ export class TransactionService {
         qb.addSelect(['account.id', 'account.name', 'account.currency']);
         qb.orderBy('transaction.date', 'DESC');
 
-        return paginate<Transaction>(qb, options);
+        const paginatedResult = await paginate<Transaction>(qb, options);
+
+        return {
+            ...paginatedResult,
+            facets,
+        };
+    }
+
+    private async getCategoryFacet(qb: SelectQueryBuilder<Transaction>): Promise<{
+        key: string,
+        count: number
+    }[]> {
+        const categoryQb = qb.clone();
+
+        categoryQb.select(['category', 'COUNT(*) as count']);
+        categoryQb.groupBy('category')
+
+        const categoryResults = await categoryQb.getRawMany();
+
+        return categoryResults.map((r: { count: number, category: string }) => ({
+            key: r.category,
+            count: r.count,
+        }));
+
+    }
+
+    private async getCurrencyFacet(qb: SelectQueryBuilder<Transaction>): Promise<{
+        key: string,
+        count: number
+    }[]> {
+        const currencyQb = qb.clone();
+
+        currencyQb.select(['account.currency', 'COUNT(transaction.id) as count']);
+        currencyQb.groupBy('account.currency')
+
+        const currencyResults = await currencyQb.getRawMany();
+
+        return currencyResults.map((r: { count: number, account_currency: string }) => ({
+            key: r.account_currency,
+            count: r.count,
+        }));
+
+    }
+
+    private async getAccountFacet(qb: SelectQueryBuilder<Transaction>): Promise<{
+        id: string,
+        key: string,
+        count: number
+    }[]> {
+        const accountQb = qb.clone();
+        accountQb.select([
+            'account.id',
+            'account.name',
+            'COUNT(transaction.id) as count',
+        ]);
+        accountQb.groupBy('account.id');
+        const accountResults = await accountQb.getRawMany();
+
+        return accountResults.map((r: { account_id: string, account_name: string, count: number }) => ({
+            id: r.account_id,
+            key: r.account_name,
+            count: r.count,
+        }));
     }
 }
