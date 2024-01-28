@@ -7,6 +7,7 @@ import {IPaginationOptions, paginate, Pagination} from "nestjs-typeorm-paginate"
 import {TransactionsFilters} from "../../../../my-wallet-shared-types/shared-types";
 import {Account} from '../entity/account.entity';
 import {User} from "../../user/entity/user.entity";
+import {TransactionsExpensesByMonth, TransactionsExpensesGroupedByCategory} from "../DTO/transaction.dto";
 
 type PaginationWithFacets<T> = Pagination<T> & {
     facets: {
@@ -66,10 +67,10 @@ export class TransactionService {
             const results: Transaction[] = [];
 
             for (const transactionDTO of transactions) {
-                const account = await queryRunner.manager.findOne(Account, { where: { id: transactionDTO.accountId } });
-                await queryRunner.manager.save(Account, { ...account, balance: account.balance + transactionDTO.amount });
+                const account = await queryRunner.manager.findOne(Account, {where: {id: transactionDTO.accountId}});
+                await queryRunner.manager.save(Account, {...account, balance: account.balance + transactionDTO.amount});
 
-                const user = await queryRunner.manager.findOne(User, { where: { id: userId } });
+                const user = await queryRunner.manager.findOne(User, {where: {id: userId}});
 
                 const transaction: Transaction = new Transaction();
                 transaction.user = user;
@@ -145,6 +146,90 @@ export class TransactionService {
         };
     }
 
+    async getTransactionsExpensesGroupedByCategories(userId: string, filters?: TransactionsFilters): Promise<TransactionsExpensesGroupedByCategory> {
+        const qb: SelectQueryBuilder<Transaction> = this.transactionRepository.createQueryBuilder('transaction').leftJoin('transaction.account', 'account').where("transaction.user_Id = :id", {id: userId});
+        const accountsFroTransactions: { id: string, key: string }[] = await this.getAccountForTransactions(qb);
+        qb.andWhere("transaction.amount < 0");
+        if (filters) {
+            if (filters.accountId && filters.accountId.length > 0) {
+                qb.andWhere('transaction.account_Id IN (:...accountIds)', {accountIds: filters.accountId});
+            }
+            if (filters.fromDate) {
+                qb.andWhere("transaction.date >= :fromDate", {fromDate: filters.fromDate});
+            }
+            if (filters.toDate) {
+                qb.andWhere("transaction.date <= :toDate", {toDate: filters.toDate});
+            }
+        }
+        qb.select(['category', 'SUM(amount) as amount'])
+        qb.groupBy('category');
+        qb.orderBy('amount', 'ASC');
+        const categoryGroupedResults = await qb.getRawMany();
+
+
+        return {
+            transactionsGroupedByCategory: categoryGroupedResults.map((r: { amount: number, category: string }) => ({
+                category: r.category,
+                amount: r.amount,
+            })),
+            accounts: accountsFroTransactions,
+        }
+
+    }
+
+    async getTransactionsExpensesByMonth(userId: string, filters?: TransactionsFilters): Promise<TransactionsExpensesByMonth> {
+        const qb: SelectQueryBuilder<Transaction> = this.transactionRepository.createQueryBuilder('transaction')
+            .leftJoin('transaction.account', 'account')
+            .where("transaction.user_Id = :id", { id: userId });
+
+        const accountsForTransactions: { id: string, key: string }[] = await this.getAccountForTransactions(qb);
+
+        if (filters) {
+            if (filters.accountId && filters.accountId.length > 0) {
+                qb.andWhere('transaction.account_Id IN (:...accountIds)', { accountIds: filters.accountId });
+            }
+            if (filters.fromDate) {
+                qb.andWhere("transaction.date >= :fromDate", { fromDate: filters.fromDate });
+            }
+            if (filters.toDate) {
+                qb.andWhere("transaction.date <= :toDate", { toDate: filters.toDate });
+            }
+        }
+
+        const selectCase = (amountAlias: string, condition: string) =>
+            `SUM(CASE WHEN ${condition} THEN transaction.amount ELSE 0 END) as ${amountAlias}`;
+
+        qb.select([
+            'EXTRACT(MONTH FROM transaction.date) as month',
+            'EXTRACT(YEAR FROM "transaction"."date") as year',
+            selectCase('incomingAmount', 'transaction.amount > 0'),
+            selectCase('outgoingAmount', 'transaction.amount < 0'),
+        ]);
+
+        qb.groupBy('month').addGroupBy('year');
+        qb.orderBy('year', 'ASC').addOrderBy('month', 'ASC');
+
+        const groupedResults = await qb.getRawMany();
+
+        const incomingTransactionsGroupedByMonth = groupedResults.map((r: { year: string, month: string, incomingamount: number, outgoingamount: number }) => ({
+            year: r.year,
+            month: r.month,
+            amount: r.incomingamount,
+        }));
+
+        const outgoingTransactionsGroupedByMonth = groupedResults.map((r: { year: string, month: string, incomingamount: number, outgoingamount: number }) => ({
+            year: r.year,
+            month: r.month,
+            amount: Math.abs(r.outgoingamount),
+        }));
+
+        return {
+            incomingTransactionsGroupedByMonth,
+            outgoingTransactionsGroupedByMonth,
+            accounts: accountsForTransactions,
+        };
+    }
+
     private async getCategoryFacet(qb: SelectQueryBuilder<Transaction>): Promise<{
         key: string,
         count: number
@@ -155,6 +240,7 @@ export class TransactionService {
         categoryQb.groupBy('category')
 
         const categoryResults = await categoryQb.getRawMany();
+
 
         return categoryResults.map((r: { count: number, category: string }) => ({
             key: r.category,
@@ -199,6 +285,21 @@ export class TransactionService {
             id: r.account_id,
             key: r.account_name,
             count: r.count,
+        }));
+    }
+
+    private async getAccountForTransactions(qb: SelectQueryBuilder<Transaction>) {
+        const accountQb = qb.clone();
+        accountQb.select([
+            'account.id',
+            'account.name',
+        ]);
+        accountQb.groupBy('account.id');
+        const accountResults = await accountQb.getRawMany();
+
+        return accountResults.map((r: { account_id: string, account_name: string, count: number }) => ({
+            id: r.account_id,
+            key: r.account_name,
         }));
     }
 }
