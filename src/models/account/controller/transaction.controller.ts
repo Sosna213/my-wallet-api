@@ -10,6 +10,7 @@ import {AuthorizationGuard} from "../../../authorization/authorization.guard";
 import {IPaginationOptions, Pagination} from "nestjs-typeorm-paginate";
 import {Transaction} from "../entity/transaction.entity";
 import {TransactionsFilters} from "../../../../my-wallet-shared-types/shared-types";
+import {TransactionsExpensesByMonth, TransactionsExpensesGroupedByCategory} from "../DTO/transaction.dto";
 
 @ApiTags('transaction')
 @Controller('transaction')
@@ -25,6 +26,7 @@ export class TransactionController {
 
         return this.transactionService.createTransaction(transaction, userId);
     }
+
     @UseGuards(AuthorizationGuard)
     @Post('/batch')
     createTransactions(@Body() transactions: CreateTransactionDTO[], @Req() request: Request) {
@@ -74,6 +76,47 @@ export class TransactionController {
         };
 
         return this.transactionService.getTransactionsForUser(options, userId, filters);
+    }
+
+
+    @UseGuards(AuthorizationGuard)
+    @Get('/expenses-grouped-by-categories')
+    getTransactionsExpensesGroupedByCategories(@Req() request: Request,
+                                               @Query('accountId') accountId?: string[],
+                                               @Query('transactionName') transactionName?: string,
+                                               @Query('fromDate') fromDate?: string,
+                                               @Query('toDate') toDate?: string,
+    ): Promise<TransactionsExpensesGroupedByCategory> {
+        const userId = request.auth.payload.sub;
+
+        const filters: TransactionsFilters = {
+            transactionName,
+            accountId,
+            fromDate,
+            toDate,
+        };
+
+        return this.transactionService.getTransactionsExpensesGroupedByCategories(userId, filters);
+    }
+
+    @UseGuards(AuthorizationGuard)
+    @Get('/expenses-grouped-by-month-and-amount')
+    getTransactionsExpensesGroupedByMonthAndAmount(@Req() request: Request,
+                                               @Query('accountId') accountId?: string[],
+                                               @Query('transactionName') transactionName?: string,
+                                               @Query('fromDate') fromDate?: string,
+                                               @Query('toDate') toDate?: string,
+    ): Promise<TransactionsExpensesByMonth> {
+        const userId = request.auth.payload.sub;
+
+        const filters: TransactionsFilters = {
+            transactionName,
+            accountId,
+            fromDate,
+            toDate,
+        };
+
+        return this.transactionService.getTransactionsExpensesByMonth(userId, filters);
     }
 
 
