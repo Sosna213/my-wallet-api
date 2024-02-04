@@ -24,6 +24,12 @@ import {AccountModule} from "./models/account/account.module";
                 database: configService.get('POSTGRES_DATABASE', 'my_wallet_db'),
                 synchronize: true,
                 autoLoadEntities: true,
+                ssl:true,
+                extra: {
+                    ssl: {
+                        rejectUnauthorized: false,
+                    }
+                }
             }),
         }),
     ],
