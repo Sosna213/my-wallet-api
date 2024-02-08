@@ -5,6 +5,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './http-exception.filter';
 import {DocumentBuilder, SwaggerModule} from '@nestjs/swagger';
+import * as fs from "fs";
 
 function checkEnvironment(configService: ConfigService) {
   const requiredEnvVars = [
@@ -22,7 +23,11 @@ function checkEnvironment(configService: ConfigService) {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const httpsOptions = {
+    key: fs.readFileSync('./secrets/cert.key'),
+    cert: fs.readFileSync('./secrets/cert.crt'),
+  };
+  const app = await NestFactory.create(AppModule, { httpsOptions });
 
   const config = new DocumentBuilder()
       .setTitle('My wallet')
